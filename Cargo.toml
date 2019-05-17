@@ -1,0 +1,7 @@
+[package]
+name = "mc-ping"
+version = "0.1.0"
+authors = ["Aurora <tomek-kubel2@wp.pl>"]
+edition = "2018"
+
+[dependencies]
