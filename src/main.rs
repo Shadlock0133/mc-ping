@@ -1,9 +1,13 @@
-use structopt::StructOpt;
 use std::{
+    convert::TryInto,
     error::Error,
     io::{Cursor, Read, Write},
-    net::{AddrParseError, IpAddr, SocketAddr, TcpStream},
+    net::{SocketAddr, TcpStream, ToSocketAddrs},
+    time::Instant,
 };
+use structopt::StructOpt;
+
+mod response;
 
 const DEFAULT_PORT: u16 = 25565;
 
@@ -15,9 +19,27 @@ struct Opts {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let opts = Opts::from_args();
-    let addr = opts.ip_addr.ip().to_string();
-    let port = opts.ip_addr.port();
     let mut stream = TcpStream::connect(opts.ip_addr)?;
+
+    handshake(&mut stream, opts.ip_addr)?;
+    request(&mut stream)?;
+    let response = response(&mut stream)?;
+    println!("{:?}", response);
+
+    let ping = 1;
+    crate::ping(&mut stream, ping)?;
+    let timer = Instant::now();
+    let pong = pong(&mut stream)?;
+    println!("Time elapsed: {:#?}", timer.elapsed());
+    assert_eq!(ping, pong, "Ping and Pong payloads differ");
+
+    Ok(())
+}
+
+/// Send handshake packet
+fn handshake<S: Write>(mut stream: S, ip_addr: SocketAddr) -> Result<(), Box<dyn Error>> {
+    let addr = ip_addr.ip().to_string();
+    let port = ip_addr.port();
 
     // Protocol Version (-1 for unspecified)
     let mut packet = vec![];
@@ -34,23 +56,35 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Send handshake
     send_packet(&mut stream, 0, &packet)?;
-    // Send request
-    send_packet(&mut stream, 0, &[])?;
-    stream.flush()?;
-
-    let (id, response) = read_packet(&mut stream)?;
-    let json = from_proto_string(&response)?;
-    
-    println!("Id: {:#x}, Response: {}", id, json);
-
-    let ping = 0i64.to_be_bytes();
-    send_packet(&mut stream, 1, &ping)?;
-    stream.flush()?;
-
-    let (_, response) = read_packet(&mut stream)?;
-    println!("Ping: {:?}, Pong: {:?}", ping, response);
 
     Ok(())
+}
+
+/// Send request packet
+fn request<W: Write>(mut stream: W) -> Result<(), Box<dyn Error>> {
+    send_packet(&mut stream, 0, &[])?;
+    stream.flush()?;
+    Ok(())
+}
+
+fn response<R: Read>(mut stream: R) -> Result<response::Response, Box<dyn Error>> {
+    let (_, response) = read_packet(&mut stream)?;
+    let json = from_proto_string(&response)?;
+    let deser: response::Response = serde_json::from_str(&json)?;
+
+    Ok(deser)
+}
+
+fn ping<W: Write>(mut stream: W, payload: i64) -> Result<(), Box<dyn Error>> {
+    let ping = payload.to_be_bytes();
+    send_packet(&mut stream, 1, &ping)?;
+    stream.flush()?;
+    Ok(())
+}
+
+fn pong<R: Read>(mut stream: R) -> Result<i64, Box<dyn Error>> {
+    let (_, data) = read_packet(&mut stream)?;
+    Ok(i64::from_be_bytes(data[..].try_into()?))
 }
 
 fn send_packet<W: Write>(mut w: W, id: i32, data: &[u8]) -> Result<(), Box<dyn Error>> {
