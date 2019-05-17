@@ -109,15 +109,18 @@ fn from_proto_string(mut bytes: &[u8]) -> Result<String, Box<dyn Error>> {
     Ok(string)
 }
 
-fn minecraft_addr(s: &str) -> Result<SocketAddr, AddrParseError> {
+fn minecraft_addr(s: &str) -> Result<SocketAddr, Box<dyn Error>> {
     parse_addr(s, DEFAULT_PORT)
 }
 
-fn parse_addr(s: &str, port: u16) -> Result<SocketAddr, AddrParseError> {
-    s.parse::<SocketAddr>()
-        .or_else(|_| s
-            .parse::<IpAddr>()
-            .map(|ip| SocketAddr::new(ip, port)))
+fn parse_addr(s: &str, port: u16) -> Result<SocketAddr, Box<dyn Error>> {
+    match s.to_socket_addrs() {
+        Ok(mut addrs) => addrs.next().ok_or("no addresses".into()),
+        Err(_) => match format!("{}:{}", s, port).to_socket_addrs() {
+            Ok(mut addrs) => addrs.next().ok_or("no addresses".into()),
+            Err(_) => unimplemented!(),
+        },
+    }
 }
 
 #[cfg(test)]
