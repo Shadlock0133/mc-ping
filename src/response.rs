@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Response {
@@ -6,6 +7,8 @@ pub struct Response {
     pub players: Players,
     pub description: Description,
     pub favicon: Option<String>,
+    #[serde(flatten)]
+    pub extra: HashMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -28,6 +31,8 @@ pub struct Sample {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Description {
-    pub text: String,
+#[serde(untagged)]
+pub enum Description {
+    String(String),
+    Map(HashMap<String, String>),
 }
