@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fmt::{self, Display},
+};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Response {
@@ -9,6 +12,17 @@ pub struct Response {
     pub favicon: Option<String>,
     #[serde(flatten)]
     pub extra: HashMap<String, String>,
+}
+
+impl Display for Response {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "Version: {}", self.version.name)?;
+        writeln!(f, "Players: {}/{}", self.players.online, self.players.max)?;
+        writeln!(f, "Desc: {:?}", self.description)?;
+        writeln!(f, "Has Favicon: {}", self.favicon.is_some())?;
+        writeln!(f, "Extra: {:?}", self.extra)?;
+        Ok(())
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
